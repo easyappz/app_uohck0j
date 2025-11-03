@@ -1,333 +1,818 @@
 openapi: 3.0.3
 info:
-  title: Car Ads Board API
+  title: Easyappz Cars Board API
   version: 1.0.0
-  description: REST API schema for Car Ads Board
+  description: |
+    REST API for Cars Classifieds built on Django.
+    This schema reflects the current server implementation and must be kept in sync with any backend changes.
+
 servers:
-  - url: /api
+  - url: /
+
 components:
   securitySchemes:
-    BearerAuth:
+    bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      description: Page number (1-based)
+      schema:
+        type: integer
+        minimum: 1
+    PageSizeParam:
+      name: page_size
+      in: query
+      description: Items per page (max 60)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 60
+
   schemas:
-    Tokens:
+    Error:
       type: object
+      description: Error response shape.
+      properties:
+        detail:
+          type: string
+          example: Invalid credentials
+        errors:
+          type: object
+          additionalProperties: {}
+          example:
+            field: ["This field is required."]
+
+    TokenResponse:
+      type: object
+      required: [access, refresh, expires_in]
       properties:
         access:
           type: string
+          description: JWT access token (use in Authorization header as Bearer <token>)
         refresh:
           type: string
+          description: JWT refresh token
         expires_in:
           type: integer
-      required: [access, refresh, expires_in]
-    Register:
+          description: Access token lifetime in seconds
+          example: 900
+
+    UserMe:
       type: object
+      required: [id, username, email, role]
       properties:
-        username: { type: string }
-        email: { type: string, format: email }
-        password: { type: string }
-      required: [username, email, password]
-    Login:
-      type: object
-      properties:
-        login: { type: string }
-        password: { type: string }
-      required: [login, password]
-    Profile:
-      type: object
-      properties:
-        id: { type: integer }
-        username: { type: string }
-        email: { type: string }
-        role: { type: string, enum: [user, moderator, admin] }
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          description: User role
+          enum: [user, moderator, admin]
+
     IdName:
       type: object
+      required: [id, name]
       properties:
-        id: { type: integer }
-        name: { type: string }
-    CarAdBase:
+        id:
+          type: integer
+        name:
+          type: string
+          maxLength: 128
+
+    CarMake:
+      allOf:
+        - $ref: '#/components/schemas/IdName'
+
+    CarModel:
       type: object
+      required: [id, name, make]
       properties:
-        id: { type: integer, readOnly: true }
-        title: { type: string }
-        description: { type: string }
-        price: { type: number, format: decimal }
-        year: { type: integer }
-        mileage: { type: integer }
-        engine_volume: { type: number }
-        power: { type: integer }
-        vin: { type: string }
-        condition: { type: string, enum: [new, used] }
-        make: { type: integer }
-        model: { type: integer }
-        body_type: { type: integer }
-        fuel_type: { type: integer }
-        transmission_type: { type: integer }
-        drive_type: { type: integer }
-        color: { type: integer }
-        city: { type: integer }
-        features:
-          type: array
-          items: { type: integer }
-        is_active: { type: boolean }
-        created_at: { type: string, format: date-time, readOnly: true }
-        updated_at: { type: string, format: date-time, readOnly: true }
-      required: [title, price, year, mileage, engine_volume, power, make, model, body_type, fuel_type, transmission_type, drive_type, color, city]
+        id:
+          type: integer
+        name:
+          type: string
+          maxLength: 128
+        make:
+          $ref: '#/components/schemas/CarMake'
+
+    BodyType:
+      allOf:
+        - $ref: '#/components/schemas/IdName'
+    FuelType:
+      allOf:
+        - $ref: '#/components/schemas/IdName'
+    TransmissionType:
+      allOf:
+        - $ref: '#/components/schemas/IdName'
+    DriveType:
+      allOf:
+        - $ref: '#/components/schemas/IdName'
+    Color:
+      allOf:
+        - $ref: '#/components/schemas/IdName'
+    City:
+      allOf:
+        - $ref: '#/components/schemas/IdName'
+    Feature:
+      allOf:
+        - $ref: '#/components/schemas/IdName'
+
     CarImage:
       type: object
+      required: [id, image, image_url, created_at]
       properties:
-        id: { type: integer }
-        image: { type: string, format: binary }
-        image_url: { type: string }
-        created_at: { type: string, format: date-time }
+        id:
+          type: integer
+        image:
+          type: string
+          description: Relative media path
+          example: /media/ads/2025/11/03/abc.jpg
+        image_url:
+          type: string
+          description: Absolute URL for convenience
+          example: https://example.com/media/ads/2025/11/03/abc.jpg
+        created_at:
+          type: string
+          format: date-time
+
+    CarAdCreateUpdateRequest:
+      type: object
+      required:
+        - title
+        - price
+        - year
+        - mileage
+        - engine_volume
+        - power
+        - condition
+        - make
+        - model
+        - body_type
+        - fuel_type
+        - transmission_type
+        - drive_type
+        - color
+        - city
+      properties:
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        price:
+          type: number
+          multipleOf: 0.01
+          minimum: 0.01
+          maximum: 9999999999.99
+        year:
+          type: integer
+          minimum: 1950
+          description: Must be between 1950 and current_year+1
+        mileage:
+          type: integer
+          minimum: 0
+          maximum: 2000000
+          description: Mileage in km
+        engine_volume:
+          type: number
+          multipleOf: 0.1
+          minimum: 0.0
+          maximum: 999.9
+          description: Liters, e.g. 2.0
+        power:
+          type: integer
+          minimum: 1
+          description: Horsepower
+        vin:
+          type: string
+          maxLength: 17
+          nullable: true
+        condition:
+          type: string
+          enum: [new, used]
+        make:
+          type: integer
+          description: CarMake id
+        model:
+          type: integer
+          description: CarModel id (must belong to selected make)
+        body_type:
+          type: integer
+        fuel_type:
+          type: integer
+        transmission_type:
+          type: integer
+        drive_type:
+          type: integer
+        color:
+          type: integer
+        city:
+          type: integer
+        features:
+          type: array
+          items:
+            type: integer
+          description: Optional list of Feature ids
+        is_active:
+          type: boolean
+          default: true
+
+    CarAdCreateUpdateResponse:
+      allOf:
+        - $ref: '#/components/schemas/CarAdCreateUpdateRequest'
+        - type: object
+          required: [id, created_at, updated_at]
+          properties:
+            id:
+              type: integer
+            created_at:
+              type: string
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
+
     CarAdListItem:
-      allOf:
-        - $ref: '#/components/schemas/CarAdBase'
-        - type: object
-          properties:
-            make: { $ref: '#/components/schemas/IdName' }
-            model: { type: object, properties: { id: {type: integer}, name: {type: string}, make: { $ref: '#/components/schemas/IdName' } } }
-            city: { $ref: '#/components/schemas/IdName' }
-            thumbnail: { type: string }
-            is_favorite: { type: boolean }
+      description: Item returned by list endpoints. Matches server's CarAdListSerializer.
+      type: object
+      required: [id, title, price, year, mileage, engine_volume, power, condition, make, model, body_type, fuel_type, transmission_type, drive_type, color, city, is_active, created_at, updated_at, is_favorite]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+        year:
+          type: integer
+        mileage:
+          type: integer
+        engine_volume:
+          type: number
+        power:
+          type: integer
+        vin:
+          type: string
+          nullable: true
+        condition:
+          type: string
+          enum: [new, used]
+        make:
+          $ref: '#/components/schemas/CarMake'
+        model:
+          $ref: '#/components/schemas/CarModel'
+        body_type:
+          type: integer
+        fuel_type:
+          type: integer
+        transmission_type:
+          type: integer
+        drive_type:
+          type: integer
+        color:
+          type: integer
+        city:
+          $ref: '#/components/schemas/City'
+        features:
+          type: array
+          items:
+            type: integer
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        thumbnail:
+          type: string
+          description: URL to first image if exists, otherwise empty string
+        is_favorite:
+          type: boolean
+
     CarAdDetail:
-      allOf:
-        - $ref: '#/components/schemas/CarAdBase'
-        - type: object
+      description: Detailed ad representation. Matches server's CarAdDetailSerializer.
+      type: object
+      required: [id, title, price, year, mileage, engine_volume, power, condition, make, model, body_type, fuel_type, transmission_type, drive_type, color, city, is_active, created_at, updated_at, images, is_favorite, seller]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+        year:
+          type: integer
+        mileage:
+          type: integer
+        engine_volume:
+          type: number
+        power:
+          type: integer
+        vin:
+          type: string
+          nullable: true
+        condition:
+          type: string
+          enum: [new, used]
+        make:
+          $ref: '#/components/schemas/CarMake'
+        model:
+          $ref: '#/components/schemas/CarModel'
+        body_type:
+          $ref: '#/components/schemas/BodyType'
+        fuel_type:
+          $ref: '#/components/schemas/FuelType'
+        transmission_type:
+          $ref: '#/components/schemas/TransmissionType'
+        drive_type:
+          $ref: '#/components/schemas/DriveType'
+        color:
+          $ref: '#/components/schemas/Color'
+        city:
+          $ref: '#/components/schemas/City'
+        features:
+          type: array
+          items:
+            $ref: '#/components/schemas/Feature'
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/CarImage'
+        is_favorite:
+          type: boolean
+        seller:
+          type: object
+          required: [id, username]
           properties:
-            seller:
-              type: object
-              properties:
-                id: { type: integer }
-                username: { type: string }
-            make: { $ref: '#/components/schemas/IdName' }
-            model: { type: object, properties: { id: {type: integer}, name: {type: string}, make: { $ref: '#/components/schemas/IdName' } } }
-            body_type: { $ref: '#/components/schemas/IdName' }
-            fuel_type: { $ref: '#/components/schemas/IdName' }
-            transmission_type: { $ref: '#/components/schemas/IdName' }
-            drive_type: { $ref: '#/components/schemas/IdName' }
-            color: { $ref: '#/components/schemas/IdName' }
-            city: { $ref: '#/components/schemas/IdName' }
-            features:
-              type: array
-              items: { $ref: '#/components/schemas/IdName' }
-            images:
-              type: array
-              items: { $ref: '#/components/schemas/CarImage' }
-            is_favorite: { type: boolean }
+            id:
+              type: integer
+            username:
+              type: string
+
     Favorite:
       type: object
+      required: [id, ad, created_at]
       properties:
-        id: { type: integer }
-        ad: { type: integer }
-        created_at: { type: string, format: date-time }
+        id:
+          type: integer
+        ad:
+          type: integer
+          description: CarAd id
+        created_at:
+          type: string
+          format: date-time
+
     ContactRequest:
       type: object
+      required: [id, name, phone, message, created_at]
       properties:
-        id: { type: integer }
-        name: { type: string }
-        phone: { type: string }
-        message: { type: string }
-        created_at: { type: string, format: date-time }
+        id:
+          type: integer
+        name:
+          type: string
+          minLength: 2
+          maxLength: 255
+        phone:
+          type: string
+          minLength: 5
+          maxLength: 32
+        message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    MetaOptions:
+      type: object
+      required: [
+        makes, models, body_types, fuel_types, transmission_types, drive_types, colors, cities, features
+      ]
+      properties:
+        makes:
+          type: array
+          items: { $ref: '#/components/schemas/CarMake' }
+        models:
+          type: array
+          items: { $ref: '#/components/schemas/CarModel' }
+        body_types:
+          type: array
+          items: { $ref: '#/components/schemas/BodyType' }
+        fuel_types:
+          type: array
+          items: { $ref: '#/components/schemas/FuelType' }
+        transmission_types:
+          type: array
+          items: { $ref: '#/components/schemas/TransmissionType' }
+        drive_types:
+          type: array
+          items: { $ref: '#/components/schemas/DriveType' }
+        colors:
+          type: array
+          items: { $ref: '#/components/schemas/Color' }
+        cities:
+          type: array
+          items: { $ref: '#/components/schemas/City' }
+        features:
+          type: array
+          items: { $ref: '#/components/schemas/Feature' }
+
+    Paginated_CarAdListItem:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CarAdListItem'
+
+    ImagesUploadResponse:
+      type: object
+      properties:
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/CarImage'
+
 paths:
-  /auth/register:
+  /api/auth/register:
     post:
-      summary: Register a new user
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/Register' }
-      responses:
-        '201':
-          description: Tokens
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Tokens' }
-  /auth/login:
-    post:
-      summary: Log in
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/Login' }
-      responses:
-        '200':
-          description: Tokens
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Tokens' }
-  /auth/refresh:
-    post:
-      summary: Refresh token pair
+      summary: Register new user
+      tags: [Auth]
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required: [username, email, password]
               properties:
-                refresh: { type: string }
-              required: [refresh]
+                username:
+                  type: string
+                  maxLength: 150
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 6
+            examples:
+              default:
+                value:
+                  username: alex
+                  email: alex@example.com
+                  password: secret123
       responses:
-        '200':
-          description: Tokens
+        '201':
+          description: Registered successfully
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Tokens' }
-  /auth/me:
-    get:
-      security: [ { BearerAuth: [] } ]
-      summary: Get current user profile
-      responses:
-        '200':
-          description: Current profile
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+              examples:
+                default:
+                  value:
+                    access: eyJhbGciOiJIUzI1NiJ9...
+                    refresh: eyJhbGciOiJIUzI1NiJ9...
+                    expires_in: 900
+        '400':
+          description: Validation error
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Profile' }
-  /ads:
-    get:
-      summary: List ads with filters
-      parameters:
-        - in: query
-          name: q
-          schema: { type: string }
-        - in: query
-          name: make
-          schema: { type: integer }
-        - in: query
-          name: model
-          schema: { type: integer }
-        - in: query
-          name: year_min
-          schema: { type: integer }
-        - in: query
-          name: year_max
-          schema: { type: integer }
-        - in: query
-          name: price_min
-          schema: { type: string }
-        - in: query
-          name: price_max
-          schema: { type: string }
-        - in: query
-          name: mileage_max
-          schema: { type: integer }
-        - in: query
-          name: transmission_type
-          schema: { type: integer }
-        - in: query
-          name: fuel_type
-          schema: { type: integer }
-        - in: query
-          name: body_type
-          schema: { type: integer }
-        - in: query
-          name: drive_type
-          schema: { type: integer }
-        - in: query
-          name: color
-          schema: { type: integer }
-        - in: query
-          name: city
-          schema: { type: integer }
-        - in: query
-          name: features
-          description: CSV ids (e.g. 1,2,3)
-          schema: { type: string }
-        - in: query
-          name: ordering
-          description: price | year | created_at (prefix with - for desc)
-          schema: { type: string }
-        - in: query
-          name: page
-          schema: { type: integer }
-        - in: query
-          name: page_size
-          schema: { type: integer }
-      responses:
-        '200':
-          description: Paginated list
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  count: { type: integer }
-                  next: { type: string, nullable: true }
-                  previous: { type: string, nullable: true }
-                  results:
-                    type: array
-                    items: { $ref: '#/components/schemas/CarAdListItem' }
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/auth/login:
     post:
-      security: [ { BearerAuth: [] } ]
-      summary: Create ad
+      summary: Login with username or email
+      tags: [Auth]
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/CarAdBase' }
+            schema:
+              type: object
+              required: [login, password]
+              properties:
+                login:
+                  type: string
+                  description: username or email
+                password:
+                  type: string
+            examples:
+              default:
+                value:
+                  login: alex
+                  password: secret123
       responses:
-        '201':
-          description: Created ad
+        '200':
+          description: Logged in
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/CarAdDetail' }
-  /ads/{id}:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '400':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/auth/refresh:
+    post:
+      summary: Refresh access token
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh]
+              properties:
+                refresh:
+                  type: string
+            examples:
+              default:
+                value:
+                  refresh: eyJhbGciOiJIUzI1NiJ9...
+      responses:
+        '200':
+          description: New tokens issued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '400':
+          description: Invalid refresh token
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/auth/me:
     get:
-      summary: Retrieve ad detail
+      summary: Get current user profile
+      tags: [Auth]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserMe' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/ads:
+    get:
+      summary: List ads
+      tags: [Ads]
       parameters:
-        - in: path
-          name: id
-          required: true
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: q
+          in: query
+          schema: { type: string }
+          description: Search in title/description
+        - name: make
+          in: query
           schema: { type: integer }
+        - name: model
+          in: query
+          schema: { type: integer }
+        - name: year_min
+          in: query
+          schema: { type: integer }
+        - name: year_max
+          in: query
+          schema: { type: integer }
+        - name: price_min
+          in: query
+          schema: { type: string }
+        - name: price_max
+          in: query
+          schema: { type: string }
+        - name: mileage_max
+          in: query
+          schema: { type: integer }
+        - name: transmission_type
+          in: query
+          schema: { type: integer }
+        - name: fuel_type
+          in: query
+          schema: { type: integer }
+        - name: body_type
+          in: query
+          schema: { type: integer }
+        - name: drive_type
+          in: query
+          schema: { type: integer }
+        - name: color
+          in: query
+          schema: { type: integer }
+        - name: city
+          in: query
+          schema: { type: integer }
+        - name: features
+          in: query
+          schema: { type: string }
+          description: CSV list of Feature ids, the ad must include ALL specified features (e.g., 1,2,3)
+        - name: ordering
+          in: query
+          schema:
+            type: string
+            pattern: '^-(price|year|created_at)$|(price|year|created_at)'
+          description: Order by price|year|created_at (prefix with - for desc)
+      responses:
+        '200':
+          description: Paginated list of ads
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Paginated_CarAdListItem' }
+              examples:
+                default:
+                  value:
+                    count: 1
+                    next: null
+                    previous: null
+                    results:
+                      - id: 12
+                        title: Toyota Camry 2.5 AT
+                        description: Clean car, one owner
+                        price: 18500.0
+                        year: 2018
+                        mileage: 65000
+                        engine_volume: 2.5
+                        power: 181
+                        vin: ""
+                        condition: used
+                        make: { id: 1, name: Toyota }
+                        model: { id: 10, name: Camry, make: { id: 1, name: Toyota } }
+                        body_type: 2
+                        fuel_type: 1
+                        transmission_type: 1
+                        drive_type: 1
+                        color: 5
+                        city: { id: 3, name: Moscow }
+                        features: [1, 2]
+                        is_active: true
+                        created_at: '2025-11-03T10:00:00Z'
+                        updated_at: '2025-11-03T10:00:00Z'
+                        thumbnail: https://example.com/media/ads/xyz.jpg
+                        is_favorite: false
+    post:
+      summary: Create ad
+      tags: [Ads]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CarAdCreateUpdateRequest' }
+            examples:
+              default:
+                value:
+                  title: Toyota Camry 2.5 AT
+                  description: Clean car, one owner
+                  price: 18500.0
+                  year: 2018
+                  mileage: 65000
+                  engine_volume: 2.5
+                  power: 181
+                  vin: JTNB11HK203456789
+                  condition: used
+                  make: 1
+                  model: 10
+                  body_type: 2
+                  fuel_type: 1
+                  transmission_type: 1
+                  drive_type: 1
+                  color: 5
+                  city: 3
+                  features: [1, 2]
+                  is_active: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CarAdCreateUpdateResponse' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/ads/{pk}:
+    parameters:
+      - name: pk
+        in: path
+        required: true
+        schema: { type: integer }
+    get:
+      summary: Retrieve ad
+      tags: [Ads]
       responses:
         '200':
           description: Ad detail
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CarAdDetail' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
     patch:
-      security: [ { BearerAuth: [] } ]
       summary: Update ad
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: integer }
+      tags: [Ads]
+      security: [{ bearerAuth: [] }]
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/CarAdBase' }
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/CarAdCreateUpdateRequest'
       responses:
         '200':
-          description: Updated
+          description: Updated (base representation)
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/CarAdDetail' }
+              schema: { $ref: '#/components/schemas/CarAdCreateUpdateResponse' }
+        '403':
+          description: Forbidden (not an owner or moderator)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
     delete:
-      security: [ { BearerAuth: [] } ]
       summary: Delete ad
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: integer }
+      tags: [Ads]
+      security: [{ bearerAuth: [] }]
       responses:
-        '204': { description: Deleted }
-  /ads/{id}/images:
+        '204':
+          description: Deleted
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/ads/{id}/images:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
     post:
-      security: [ { BearerAuth: [] } ]
-      summary: Upload images
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: integer }
+      summary: Upload image(s) for ad
+      description: |
+        Requires authentication. Accepts either a single field `image` (binary) or multiple `images` (array of binaries).
+        Constraints: up to 10 images per ad in total, each file <= 5MB, content-type must start with image/.
+      tags: [Ads]
+      security: [{ bearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -335,211 +820,248 @@ paths:
             schema:
               type: object
               properties:
-                image: { type: string, format: binary }
+                image:
+                  type: string
+                  format: binary
                 images:
                   type: array
-                  items: { type: string, format: binary }
+                  items:
+                    type: string
+                    format: binary
+            encoding:
+              images:
+                style: form
+                explode: true
       responses:
         '201':
-          description: Uploaded images
+          description: Images uploaded
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  images:
-                    type: array
-                    items: { $ref: '#/components/schemas/CarImage' }
-  /ads/{id}/favorite:
+              schema: { $ref: '#/components/schemas/ImagesUploadResponse' }
+              examples:
+                default:
+                  value:
+                    images:
+                      - id: 1
+                        image: /media/ads/a.jpg
+                        image_url: https://example.com/media/ads/a.jpg
+                        created_at: '2025-11-03T10:00:00Z'
+        '400':
+          description: Bad request (too many files, invalid type/size, etc.)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403':
+          description: Forbidden (not owner/moderator)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/ads/{id}/favorite:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
     post:
-      security: [ { BearerAuth: [] } ]
       summary: Add to favorites (idempotent)
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: integer }
+      tags: [Favorites]
+      security: [{ bearerAuth: [] }]
       responses:
-        '200':
-          description: Already favorite
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Favorite' }
         '201':
-          description: Added
+          description: Created new favorite
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Favorite' }
-    delete:
-      security: [ { BearerAuth: [] } ]
-      summary: Remove from favorites
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: integer }
-      responses:
-        '204': { description: Removed }
-  /favorites:
-    get:
-      security: [ { BearerAuth: [] } ]
-      summary: List my favorite ads (supports same filters)
-      parameters:
-        - in: query
-          name: q
-          schema: { type: string }
-        - in: query
-          name: make
-          schema: { type: integer }
-        - in: query
-          name: model
-          schema: { type: integer }
-        - in: query
-          name: year_min
-          schema: { type: integer }
-        - in: query
-          name: year_max
-          schema: { type: integer }
-        - in: query
-          name: price_min
-          schema: { type: string }
-        - in: query
-          name: price_max
-          schema: { type: string }
-        - in: query
-          name: mileage_max
-          schema: { type: integer }
-        - in: query
-          name: transmission_type
-          schema: { type: integer }
-        - in: query
-          name: fuel_type
-          schema: { type: integer }
-        - in: query
-          name: body_type
-          schema: { type: integer }
-        - in: query
-          name: drive_type
-          schema: { type: integer }
-        - in: query
-          name: color
-          schema: { type: integer }
-        - in: query
-          name: city
-          schema: { type: integer }
-        - in: query
-          name: features
-          schema: { type: string }
-        - in: query
-          name: ordering
-          schema: { type: string }
-        - in: query
-          name: page
-          schema: { type: integer }
-        - in: query
-          name: page_size
-          schema: { type: integer }
-      responses:
         '200':
-          description: Paginated list
+          description: Already existed
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  count: { type: integer }
-                  next: { type: string, nullable: true }
-                  previous: { type: string, nullable: true }
-                  results:
-                    type: array
-                    items: { $ref: '#/components/schemas/CarAdListItem' }
-  /ads/{id}/contact:
-    post:
-      summary: Create contact request
+              schema: { $ref: '#/components/schemas/Favorite' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    delete:
+      summary: Remove from favorites
+      tags: [Favorites]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204':
+          description: Removed
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/favorites:
+    get:
+      summary: List my favorite ads
+      tags: [Favorites]
+      security: [{ bearerAuth: [] }]
       parameters:
-        - in: path
-          name: id
-          required: true
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: q
+          in: query
+          schema: { type: string }
+          description: Search in title/description
+        - name: make
+          in: query
           schema: { type: integer }
+        - name: model
+          in: query
+          schema: { type: integer }
+        - name: year_min
+          in: query
+          schema: { type: integer }
+        - name: year_max
+          in: query
+          schema: { type: integer }
+        - name: price_min
+          in: query
+          schema: { type: string }
+        - name: price_max
+          in: query
+          schema: { type: string }
+        - name: mileage_max
+          in: query
+          schema: { type: integer }
+        - name: transmission_type
+          in: query
+          schema: { type: integer }
+        - name: fuel_type
+          in: query
+          schema: { type: integer }
+        - name: body_type
+          in: query
+          schema: { type: integer }
+        - name: drive_type
+          in: query
+          schema: { type: integer }
+        - name: color
+          in: query
+          schema: { type: integer }
+        - name: city
+          in: query
+          schema: { type: integer }
+        - name: features
+          in: query
+          schema: { type: string }
+          description: CSV list of Feature ids (ad must include ALL)
+        - name: ordering
+          in: query
+          schema:
+            type: string
+            pattern: '^-(price|year|created_at)$|(price|year|created_at)'
+          description: Order by price|year|created_at (prefix with - for desc)
+      responses:
+        '200':
+          description: Paginated list of favorite ads
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Paginated_CarAdListItem' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/ads/{id}/contact:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
+    post:
+      summary: Create contact request for an ad
+      tags: [Contacts]
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              properties:
-                name: { type: string }
-                phone: { type: string }
-                message: { type: string }
               required: [name, phone]
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 255
+                phone:
+                  type: string
+                  minLength: 5
+                  maxLength: 32
+                message:
+                  type: string
+            examples:
+              default:
+                value:
+                  name: John
+                  phone: '+1234567890'
+                  message: I'm interested. Is the car available?
       responses:
         '201':
           description: Created
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ContactRequest' }
-  /meta/options:
-    get:
-      summary: Get reference dictionaries
-      responses:
-        '200':
-          description: All reference data
+        '400':
+          description: Validation error
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  makes:
-                    type: array
-                    items: { $ref: '#/components/schemas/IdName' }
-                  models:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id: { type: integer }
-                        name: { type: string }
-                        make: { $ref: '#/components/schemas/IdName' }
-                  body_types:
-                    type: array
-                    items: { $ref: '#/components/schemas/IdName' }
-                  fuel_types:
-                    type: array
-                    items: { $ref: '#/components/schemas/IdName' }
-                  transmission_types:
-                    type: array
-                    items: { $ref: '#/components/schemas/IdName' }
-                  drive_types:
-                    type: array
-                    items: { $ref: '#/components/schemas/IdName' }
-                  colors:
-                    type: array
-                    items: { $ref: '#/components/schemas/IdName' }
-                  cities:
-                    type: array
-                    items: { $ref: '#/components/schemas/IdName' }
-                  features:
-                    type: array
-                    items: { $ref: '#/components/schemas/IdName' }
-  /meta/models:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Ad not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/meta/options:
     get:
-      summary: Get models by make
-      parameters:
-        - in: query
-          name: make_id
-          required: true
-          schema: { type: integer }
+      summary: Get all reference dictionaries
+      tags: [Meta]
       responses:
         '200':
-          description: Models list
+          description: All meta options
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MetaOptions' }
+              examples:
+                default:
+                  value:
+                    makes: [ { id: 1, name: Toyota } ]
+                    models: [ { id: 10, name: Camry, make: { id: 1, name: Toyota } } ]
+                    body_types: [ { id: 2, name: Sedan } ]
+                    fuel_types: [ { id: 1, name: Petrol } ]
+                    transmission_types: [ { id: 1, name: Automatic } ]
+                    drive_types: [ { id: 1, name: FWD } ]
+                    colors: [ { id: 5, name: Black } ]
+                    cities: [ { id: 3, name: Moscow } ]
+                    features: [ { id: 1, name: Heated seats } ]
+
+  /api/meta/models:
+    get:
+      summary: Get car models by make
+      tags: [Meta]
+      parameters:
+        - name: make_id
+          in: query
+          required: true
+          schema: { type: integer }
+          description: CarMake id
+      responses:
+        '200':
+          description: Models for a make
           content:
             application/json:
               schema:
                 type: array
-                items:
-                  type: object
-                  properties:
-                    id: { type: integer }
-                    name: { type: string }
-                    make: { $ref: '#/components/schemas/IdName' }
-security: []
+                items: { $ref: '#/components/schemas/CarModel' }
+        '400':
+          description: make_id required
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
