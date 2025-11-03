@@ -1,7 +1,6 @@
 from typing import Any, Dict, List
 
 from django.contrib.auth import authenticate, get_user_model
-from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -35,6 +34,7 @@ from .serializers import (
     LoginSerializer,
     TokenSerializer,
     ProfileSerializer,
+    CarAdBaseSerializer,
     CarAdListSerializer,
     CarAdDetailSerializer,
     CarImageSerializer,
@@ -141,8 +141,12 @@ class MeView(APIView):
 # Ads endpoints
 class AdsListCreateView(ListCreateAPIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [AllowAny]
     pagination_class = DefaultPagination
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAuthenticated()]
+        return [AllowAny()]
 
     def get_queryset(self):
         qs = (
@@ -168,7 +172,7 @@ class AdsListCreateView(ListCreateAPIView):
     def get_serializer_class(self):
         if self.request and self.request.method == "GET":
             return CarAdListSerializer
-        return CarAdBaseSerializer  # type: ignore[name-defined]
+        return CarAdBaseSerializer
 
     @extend_schema(parameters=[OpenApiParameter(name="search", description="Title contains search", required=False, type=str)])
     def get(self, request, *args, **kwargs):
@@ -176,7 +180,6 @@ class AdsListCreateView(ListCreateAPIView):
 
     @extend_schema(request=CarAdDetailSerializer, responses={201: CarAdDetailSerializer})
     def post(self, request, *args, **kwargs):
-        self.permission_classes = [IsAuthenticated]  # require auth for create
         return super().post(request, *args, **kwargs)
 
     def perform_create(self, serializer):
@@ -209,7 +212,7 @@ class AdDetailView(RetrieveUpdateDestroyAPIView):
     def get_serializer_class(self):
         if self.request and self.request.method == "GET":
             return CarAdDetailSerializer
-        return CarAdBaseSerializer  # type: ignore[name-defined]
+        return CarAdBaseSerializer
 
     @extend_schema(responses={200: CarAdDetailSerializer})
     def get(self, request, *args, **kwargs):

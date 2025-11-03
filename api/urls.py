@@ -32,7 +32,7 @@ urlpatterns = [
     path("favorites", FavoritesListView.as_view(), name="favorites-list"),
 
     # Contact
-    path("ads/<int:id>/contact", ContactRequestCreateView.as_view(), name="ads-contact"),
+    path("ads/<int:id}/contact", ContactRequestCreateView.as_view(), name="ads-contact"),
 
     # Meta
     path("meta/options", MetaOptionsView.as_view(), name="meta-options"),
