@@ -1,6 +1,7 @@
 from typing import Any
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
@@ -187,6 +188,28 @@ class CarAdBaseSerializer(serializers.ModelSerializer):
         model = attrs.get("model") or getattr(self.instance, "model", None)
         if make and model and model.make_id != make.id:
             raise serializers.ValidationError({"model": _("Selected model does not belong to the selected make")})
+
+        # Ranges validation
+        year = attrs.get("year") if "year" in attrs else getattr(self.instance, "year", None)
+        if year is not None:
+            current_year = timezone.now().year
+            if year < 1950 or year > current_year + 1:
+                raise serializers.ValidationError({"year": _("Year must be between 1950 and %(max)d") % {"max": current_year + 1}})
+
+        price = attrs.get("price") if "price" in attrs else getattr(self.instance, "price", None)
+        if price is not None:
+            if price <= 0:
+                raise serializers.ValidationError({"price": _("Price must be positive")})
+
+        mileage = attrs.get("mileage") if "mileage" in attrs else getattr(self.instance, "mileage", None)
+        if mileage is not None:
+            if mileage < 0 or mileage > 2000000:
+                raise serializers.ValidationError({"mileage": _("Mileage must be between 0 and 2,000,000 km")})
+
+        vin = attrs.get("vin") if "vin" in attrs else getattr(self.instance, "vin", None)
+        if vin:
+            if len(vin) > 17:
+                raise serializers.ValidationError({"vin": _("VIN must be up to 17 characters")})
         return attrs
 
 
@@ -228,11 +251,13 @@ class CarAdDetailSerializer(CarAdBaseSerializer):
     city = CitySerializer(read_only=True)
     features = FeatureSerializer(many=True, read_only=True)
     images = CarImageSerializer(many=True, read_only=True)
+    is_favorite = serializers.SerializerMethodField()
 
     class Meta(CarAdBaseSerializer.Meta):
         fields = CarAdBaseSerializer.Meta.fields + (
             "seller",
             "images",
+            "is_favorite",
         )
 
     def get_seller(self, obj: CarAd) -> dict:
@@ -240,6 +265,13 @@ class CarAdDetailSerializer(CarAdBaseSerializer):
             "id": obj.seller_id,
             "username": getattr(obj.seller, "username", ""),
         }
+
+    def get_is_favorite(self, obj: CarAd) -> bool:
+        request = self.context.get("request")
+        user = request.user if request else None
+        if not user or not user.is_authenticated:
+            return False
+        return Favorite.objects.filter(user=user, ad=obj).exists()
 
 
 class FavoriteSerializer(serializers.ModelSerializer):
@@ -254,6 +286,17 @@ class ContactRequestSerializer(serializers.ModelSerializer):
         model = ContactRequest
         fields = ("id", "name", "phone", "message", "created_at")
         read_only_fields = ("id", "created_at")
+
+    def validate_name(self, value: str) -> str:
+        if not value or len(value.strip()) < 2:
+            raise serializers.ValidationError("Name must be at least 2 characters")
+        return value.strip()
+
+    def validate_phone(self, value: str) -> str:
+        v = value.strip()
+        if len(v) < 5:
+            raise serializers.ValidationError("Phone is too short")
+        return v
 
     def create(self, validated_data: dict) -> ContactRequest:
         ad = self.context["ad"]

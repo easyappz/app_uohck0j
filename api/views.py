@@ -8,12 +8,15 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView, ListAPIView
+from rest_framework.filters import OrderingFilter
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 from .authentication import JWTAuthentication
 from .permissions import IsAdOwnerOrModerator
 from .pagination import DefaultPagination
 from .utils.jwt import encode_jwt, decode_jwt
+from .filters import CarAdFilter
 from .models import (
     UserProfile,
     CarMake,
@@ -142,6 +145,9 @@ class MeView(APIView):
 class AdsListCreateView(ListCreateAPIView):
     authentication_classes = [JWTAuthentication]
     pagination_class = DefaultPagination
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_class = CarAdFilter
+    ordering_fields = ["price", "year", "created_at"]
 
     def get_permissions(self):
         if self.request.method == "POST":
@@ -164,9 +170,6 @@ class AdsListCreateView(ListCreateAPIView):
             )
             .prefetch_related("images", "features")
         )
-        search = self.request.query_params.get("search")
-        if search:
-            qs = qs.filter(title__icontains=search)
         return qs
 
     def get_serializer_class(self):
@@ -174,7 +177,26 @@ class AdsListCreateView(ListCreateAPIView):
             return CarAdListSerializer
         return CarAdBaseSerializer
 
-    @extend_schema(parameters=[OpenApiParameter(name="search", description="Title contains search", required=False, type=str)])
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name="q", description="Search in title/description", required=False, type=str),
+            OpenApiParameter(name="make", description="Car make id", required=False, type=int),
+            OpenApiParameter(name="model", description="Car model id", required=False, type=int),
+            OpenApiParameter(name="year_min", description="Min year", required=False, type=int),
+            OpenApiParameter(name="year_max", description="Max year", required=False, type=int),
+            OpenApiParameter(name="price_min", description="Min price", required=False, type=str),
+            OpenApiParameter(name="price_max", description="Max price", required=False, type=str),
+            OpenApiParameter(name="mileage_max", description="Max mileage", required=False, type=int),
+            OpenApiParameter(name="transmission_type", description="Transmission type id", required=False, type=int),
+            OpenApiParameter(name="fuel_type", description="Fuel type id", required=False, type=int),
+            OpenApiParameter(name="body_type", description="Body type id", required=False, type=int),
+            OpenApiParameter(name="drive_type", description="Drive type id", required=False, type=int),
+            OpenApiParameter(name="color", description="Color id", required=False, type=int),
+            OpenApiParameter(name="city", description="City id", required=False, type=int),
+            OpenApiParameter(name="features", description="Feature ids CSV (e.g. 1,2,3)", required=False, type=str),
+            OpenApiParameter(name="ordering", description="Order by price|year|created_at (prefix with - for desc)", required=False, type=str),
+        ]
+    )
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
 
@@ -232,6 +254,9 @@ class AdImagesUploadView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
+    MAX_IMAGES_PER_AD = 10
+    MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 MB
+
     @extend_schema(request=None, responses={201: CarImageSerializer})
     def post(self, request, id: int):
         ad = get_object_or_404(CarAd, pk=id)
@@ -243,8 +268,20 @@ class AdImagesUploadView(APIView):
         files = request.FILES.getlist("images") or ([request.FILES.get("image")] if request.FILES.get("image") else [])
         if not files:
             return Response({"detail": "No files provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate total count
+        existing_count = ad.images.count()
+        if existing_count + len(files) > self.MAX_IMAGES_PER_AD:
+            return Response({"detail": f"Maximum {self.MAX_IMAGES_PER_AD} images per ad"}, status=status.HTTP_400_BAD_REQUEST)
+
         created: List[Dict[str, Any]] = []
         for f in files:
+            # Basic validations: content type and size
+            content_type = getattr(f, "content_type", "") or ""
+            if not content_type.startswith("image/"):
+                return Response({"detail": "Only image files are allowed"}, status=status.HTTP_400_BAD_REQUEST)
+            if getattr(f, "size", 0) > self.MAX_IMAGE_SIZE:
+                return Response({"detail": "Image is too large (max 5MB)"}, status=status.HTTP_400_BAD_REQUEST)
             img = CarImage.objects.create(ad=ad, image=f)
             created.append(CarImageSerializer(img, context={"request": request}).data)
         return Response({"images": created}, status=status.HTTP_201_CREATED)
@@ -273,6 +310,9 @@ class FavoritesListView(ListAPIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     pagination_class = DefaultPagination
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_class = CarAdFilter
+    ordering_fields = ["price", "year", "created_at"]
 
     serializer_class = CarAdListSerializer
 

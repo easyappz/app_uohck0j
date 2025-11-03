@@ -24,6 +24,7 @@ class CarModelAdmin(admin.ModelAdmin):
 @admin.register(models.BodyType, models.FuelType, models.TransmissionType, models.DriveType, models.Color, models.City, models.Feature)
 class SimpleDictAdmin(admin.ModelAdmin):
     search_fields = ("name",)
+    list_filter = ()
 
 
 class CarImageInline(admin.TabularInline):
@@ -31,12 +32,36 @@ class CarImageInline(admin.TabularInline):
     extra = 0
 
 
+def make_ads_active(modeladmin, request, queryset):
+    queryset.update(is_active=True)
+make_ads_active.short_description = "Publish selected ads"
+
+
+def make_ads_inactive(modeladmin, request, queryset):
+    queryset.update(is_active=False)
+make_ads_inactive.short_description = "Deactivate selected ads"
+
+
 @admin.register(models.CarAd)
 class CarAdAdmin(admin.ModelAdmin):
     list_display = ("id", "title", "seller", "price", "year", "is_active", "created_at")
-    list_filter = ("is_active", "make", "model", "city", "fuel_type", "transmission_type")
-    search_fields = ("title", "description", "vin", "seller__username")
+    list_filter = (
+        "is_active",
+        "make",
+        "model",
+        "city",
+        "fuel_type",
+        "transmission_type",
+        "body_type",
+        "drive_type",
+        "color",
+        "year",
+    )
+    search_fields = ("title", "description", "vin", "seller__username", "seller__email")
     inlines = [CarImageInline]
+    actions = [make_ads_active, make_ads_inactive]
+    date_hierarchy = "created_at"
+    autocomplete_fields = ("make", "model", "city")
 
 
 @admin.register(models.Favorite)
