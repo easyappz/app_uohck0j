@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { deleteAd, getAd, listAds, updateAd } from '../api/ads';
+import { deleteAd, listAds, updateAd } from '../api/ads';
 import { listFavorites } from '../api/favorites';
 import AdCard from '../components/AdCard';
 
@@ -15,11 +15,8 @@ const MyAds = () => {
     let mounted = true;
     async function loadMine() {
       try {
-        // Load first page and then filter by seller via detail endpoints
-        const list = await listAds({ page: 1, page_size: 24, ordering: '-created_at' });
-        const details = await Promise.all((list.results || []).map((it) => getAd(it.id).catch(() => null)));
-        const mine = details.filter(Boolean).filter((d) => d.seller?.id === user?.id);
-        if (mounted) setItems(mine);
+        const list = await listAds({ page: 1, page_size: 24, ordering: '-created_at', mine: 1 });
+        if (mounted) setItems(list.results || []);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -40,6 +37,12 @@ const MyAds = () => {
     setEditingId(null);
   }
 
+  async function toggleActive(id, current) {
+    const next = !current;
+    await updateAd(id, { is_active: next });
+    setItems((prev) => prev.map((x) => (x.id === id ? { ...x, is_active: next } : x)));
+  }
+
   async function remove(id) {
     await deleteAd(id);
     setItems((prev) => prev.filter((x) => x.id !== id));
@@ -54,9 +57,10 @@ const MyAds = () => {
         <div data-easytag="id4-react/src/pages/Profile.js" key={it.id} className="bg-white border border-border rounded-xl p-4 flex items-center justify-between gap-4">
           <div data-easytag="id5-react/src/pages/Profile.js" className="flex-1">
             <div data-easytag="id6-react/src/pages/Profile.js" className="font-semibold">{it.title}</div>
-            <div data-easytag="id7-react/src/pages/Profile.js" className="text-sm text-muted">ID: {it.id}</div>
+            <div data-easytag="id7-react/src/pages/Profile.js" className="text-sm text-muted">ID: {it.id} · {it.is_active ? 'Опубликовано' : 'Снято с публикации'}</div>
           </div>
           <div data-easytag="id8-react/src/pages/Profile.js" className="flex items-center gap-2">
+            <button data-easytag="id8a-react/src/pages/Profile.js" onClick={() => toggleActive(it.id, it.is_active)} className={`px-3 py-2 rounded-md border ${it.is_active ? 'border-red-200 text-red-600' : 'border-accent text-accent'}`}>{it.is_active ? 'Снять с публикации' : 'Опубликовать'}</button>
             {editingId === it.id ? (
               <>
                 <input data-easytag="id9-react/src/pages/Profile.js" type="number" value={editPrice} onChange={(e) => setEditPrice(e.target.value)} className="px-3 py-2 border border-border rounded-md w-32" />

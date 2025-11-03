@@ -37,6 +37,8 @@ const Home = () => {
         </div>
         {loading ? (
           <div data-easytag="id9-react/src/pages/Home.js" className="text-muted">Загрузка...</div>
+        ) : items.length === 0 ? (
+          <div data-easytag="id9a-react/src/pages/Home.js" className="text-muted">Пока нет объявлений</div>
         ) : (
           <div data-easytag="id10-react/src/pages/Home.js" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {items.map((it) => (
