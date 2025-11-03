@@ -1,30 +1,26 @@
 import instance from './axios';
 
-export async function register(username, email, password) {
-  const { data } = await instance.post('/api/auth/register', { username, email, password });
-  if (data?.access) {
-    localStorage.setItem('token', data.access);
-  }
+export async function register(payload) {
+  const { data } = await instance.post('/api/auth/register', payload);
   return data;
 }
 
-export async function login(loginValue, password) {
-  const { data } = await instance.post('/api/auth/login', { login: loginValue, password });
-  if (data?.access) {
-    localStorage.setItem('token', data.access);
-  }
-  return data;
-}
-
-export async function refresh(refreshToken) {
-  const { data } = await instance.post('/api/auth/refresh', { refresh: refreshToken });
-  if (data?.access) {
-    localStorage.setItem('token', data.access);
-  }
+export async function login(payload) {
+  const { data } = await instance.post('/api/auth/login', payload);
   return data;
 }
 
 export async function me() {
   const { data } = await instance.get('/api/auth/me');
   return data;
+}
+
+export async function refreshToken(refresh) {
+  const { data } = await instance.post('/api/auth/refresh', { refresh });
+  return data;
+}
+
+export function logoutClientSide() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('refresh');
 }

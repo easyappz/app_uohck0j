@@ -1,27 +1,17 @@
 import instance from './axios';
 
-export async function getAds(params = {}) {
-  const search = new URLSearchParams();
-  Object.entries(params).forEach(([k, v]) => {
-    if (v === '' || v == null) return;
-    if (Array.isArray(v)) {
-      if (v.length) search.set(k, v.join(','));
-    } else {
-      search.set(k, String(v));
-    }
-  });
-  const qs = search.toString();
-  const { data } = await instance.get(`/api/ads${qs ? `?${qs}` : ''}`);
-  return data;
-}
-
-export async function createAd(payload) {
-  const { data } = await instance.post('/api/ads', payload);
+export async function listAds(params = {}) {
+  const { data } = await instance.get('/api/ads', { params });
   return data;
 }
 
 export async function getAd(id) {
   const { data } = await instance.get(`/api/ads/${id}`);
+  return data;
+}
+
+export async function createAd(payload) {
+  const { data } = await instance.post('/api/ads', payload);
   return data;
 }
 
@@ -35,9 +25,30 @@ export async function deleteAd(id) {
   return data;
 }
 
-export async function uploadImages(id, files) {
-  const fd = new FormData();
-  (files || []).forEach((file) => fd.append('images', file));
-  const { data } = await instance.post(`/api/ads/${id}/images`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+export async function uploadImages(adId, files) {
+  const formData = new FormData();
+  if (Array.isArray(files)) {
+    files.forEach((f) => formData.append('images', f));
+  } else if (files) {
+    formData.append('image', files);
+  }
+  const { data } = await instance.post(`/api/ads/${adId}/images`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
+
+export async function addFavorite(id) {
+  const { data } = await instance.post(`/api/ads/${id}/favorite`);
+  return data;
+}
+
+export async function removeFavorite(id) {
+  const { data } = await instance.delete(`/api/ads/${id}/favorite`);
+  return data;
+}
+
+export async function contactSeller(id, payload) {
+  const { data } = await instance.post(`/api/ads/${id}/contact`, payload);
   return data;
 }

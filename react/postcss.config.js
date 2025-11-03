@@ -1,4 +1,4 @@
-/* Easyappz PostCSS config */
+/* Easyappz: PostCSS config */
 module.exports = {
   plugins: {
     tailwindcss: {},
