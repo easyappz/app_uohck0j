@@ -4,6 +4,13 @@ import instance from './axios';
 let isRefreshing = false;
 let failedQueue = [];
 
+const REFRESH_URL = '/api/auth/refresh';
+
+function isRefreshRequest(config) {
+  const url = config?.url || '';
+  return url.indexOf(REFRESH_URL) !== -1;
+}
+
 function processQueue(error, token = null) {
   failedQueue.forEach((prom) => {
     if (error) {
@@ -19,8 +26,13 @@ export function setupInterceptors() {
   instance.interceptors.response.use(
     (response) => response,
     async (error) => {
-      const originalRequest = error.config;
+      const originalRequest = error.config || {};
       const status = error.response?.status;
+
+      // If refresh endpoint itself failed — do not try to refresh again
+      if (status === 401 && isRefreshRequest(originalRequest)) {
+        return Promise.reject(error);
+      }
 
       if (status === 401 && !originalRequest._retry) {
         if (isRefreshing) {
@@ -28,6 +40,7 @@ export function setupInterceptors() {
             failedQueue.push({ resolve, reject });
           })
             .then((token) => {
+              originalRequest.headers = originalRequest.headers || {};
               originalRequest.headers['Authorization'] = `Bearer ${token}`;
               return instance(originalRequest);
             })
@@ -45,14 +58,16 @@ export function setupInterceptors() {
             return Promise.reject(error);
           }
 
-          const { data } = await instance.post('/api/auth/refresh', { refresh });
+          const { data } = await instance.post(REFRESH_URL, { refresh });
           const newToken = data?.access;
           const newRefresh = data?.refresh;
 
           if (newToken) localStorage.setItem('token', newToken);
           if (newRefresh) localStorage.setItem('refresh', newRefresh);
 
+          originalRequest.headers = originalRequest.headers || {};
           originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+
           processQueue(null, newToken);
           return instance(originalRequest);
         } catch (e) {
