@@ -18,9 +18,10 @@ const PrivateRoute = ({ children }) => {
     setError('');
     setLoading(true);
     try {
-      const res = await login(form.login, form.password);
+      const res = await login({ login: form.login, password: form.password });
       if (res?.access) {
         localStorage.setItem('token', res.access);
+        if (res?.refresh) localStorage.setItem('refresh', res.refresh);
         setShow(false);
         navigate(location.pathname, { replace: true });
       }

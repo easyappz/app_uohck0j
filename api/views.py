@@ -154,9 +154,9 @@ class AdsListCreateView(ListCreateAPIView):
             return [IsAuthenticated()]
         return [AllowAny()]
 
-    def get_queryset(self):
-        qs = (
-            CarAd.objects.filter(is_active=True)
+    def _base_queryset(self):
+        return (
+            CarAd.objects.all()
             .select_related(
                 "seller",
                 "make",
@@ -170,7 +170,18 @@ class AdsListCreateView(ListCreateAPIView):
             )
             .prefetch_related("images", "features")
         )
-        return qs
+
+    def get_queryset(self):
+        qs = self._base_queryset()
+        mine = (self.request.query_params.get("mine") or "").lower() in {"1", "true", "yes"}
+        if mine:
+            user = getattr(self.request, "user", None)
+            if user and user.is_authenticated:
+                return qs.filter(seller=user)
+            # If not authenticated, return empty set to avoid leaking data
+            return qs.none()
+        # Public catalog shows only active ads
+        return qs.filter(is_active=True)
 
     def get_serializer_class(self):
         if self.request and self.request.method == "GET":
@@ -195,12 +206,13 @@ class AdsListCreateView(ListCreateAPIView):
             OpenApiParameter(name="city", description="City id", required=False, type=int),
             OpenApiParameter(name="features", description="Feature ids CSV (e.g. 1,2,3)", required=False, type=str),
             OpenApiParameter(name="ordering", description="Order by price|year|created_at (prefix with - for desc)", required=False, type=str),
+            OpenApiParameter(name="mine", description="If true, return only current user's ads", required=False, type=bool),
         ]
     )
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
 
-    @extend_schema(request=CarAdDetailSerializer, responses={201: CarAdDetailSerializer})
+    @extend_schema(request=CarAdBaseSerializer, responses={201: CarAdBaseSerializer})
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
 

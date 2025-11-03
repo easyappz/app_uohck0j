@@ -650,6 +650,10 @@ paths:
             type: string
             pattern: '^-(price|year|created_at)$|(price|year|created_at)'
           description: Order by price|year|created_at (prefix with - for desc)
+        - name: mine
+          in: query
+          schema: { type: boolean }
+          description: If true, returns only current user's ads (requires authentication)
       responses:
         '200':
           description: Paginated list of ads

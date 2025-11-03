@@ -5,6 +5,8 @@ export async function listAds(params = {}) {
   return data;
 }
 
+export const getAds = listAds;
+
 export async function getAd(id) {
   const { data } = await instance.get(`/api/ads/${id}`);
   return data;
@@ -38,6 +40,7 @@ export async function uploadImages(adId, files) {
   return data;
 }
 
+// Kept for backward compatibility; prefer using ../api/favorites
 export async function addFavorite(id) {
   const { data } = await instance.post(`/api/ads/${id}/favorite`);
   return data;

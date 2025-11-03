@@ -5,6 +5,11 @@ export async function getMetaOptions() {
   return data;
 }
 
+export async function getOptions() {
+  const { data } = await instance.get('/api/meta/options');
+  return data;
+}
+
 export async function getModelsByMake(makeId) {
   const { data } = await instance.get('/api/meta/models', { params: { make_id: makeId } });
   return data;
